@@ -97,7 +97,7 @@ gnode_t *gnode_new(char label)
   return node;
 }
 
-/* Link two graph nodes, prent --> child. Child node is an already existing
+/* Link two graph nodes, parent --> child. Child node is an already existing
    node.
  */
 void gnode_child(gnode_t *parent, gnode_t *child)
@@ -119,7 +119,7 @@ void gnode_child(gnode_t *parent, gnode_t *child)
     lnode_append(child->parents, parent);
 }
 
-/* Link two grapnh nodes, parent --> child. Child node is created with the
+/* Link two graph nodes, parent --> child. Child node is created with the
    indicated label.
  */
 gnode_t *gnode_child_new(gnode_t *parent, char label)
@@ -156,7 +156,7 @@ gnode_t *gnode_get(gnode_t *node, char label)
   return NULL;
 }
 
-/* Print nodes from given graph.
+/* Print nodes from given graph (implementation).
  */
 void impl_gnode_print(gnode_t *node, char *node_str)
 {
@@ -188,6 +188,8 @@ void impl_gnode_print(gnode_t *node, char *node_str)
   }
 }
 
+/* Print nodes from given graph.
+ */
 void gnode_print(gnode_t *node)
 {
   char *node_str = malloc(sizeof(char) * (gnode_count + 1));
