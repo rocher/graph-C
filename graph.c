@@ -1,6 +1,7 @@
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <threads.h>
 
 /* A task is a pointer to a function:  void task(int time) The parameter
@@ -33,6 +34,10 @@ typedef struct
   int required;  /* number of parents (constant); pre-requisites */
   int satisfied; /* number of parents that finished their tasks at runtime */
 } deps_t;
+
+/* Total number of nodes.
+ */
+int gnode_count = 0;
 
 /* A graph node has a number of dependencies that must be satisfied before the
    task can be triggered, a list of nodes that depend on it and a list of
@@ -79,6 +84,8 @@ gnode_t *gnode_new(char label)
   gnode_t *node = (gnode_t *)malloc(sizeof(gnode_t));
   if (node == NULL)
     exit(EXIT_FAILURE);
+
+  gnode_count++;
   node->label = label;
   node->deps.required = 0;
   node->deps.satisfied = 0;
@@ -86,6 +93,7 @@ gnode_t *gnode_new(char label)
   node->children = NULL;
   node->parents = NULL;
   mtx_init(&node->mutex, mtx_plain);
+
   return node;
 }
 
@@ -150,26 +158,45 @@ gnode_t *gnode_get(gnode_t *node, char label)
 
 /* Print nodes from given graph.
  */
-void gnode_print(gnode_t *node)
+void impl_gnode_print(gnode_t *node, char *node_str)
 {
   lnode_t *l;
 
-  printf("NODE %c -->", node->label);
+  if (strchr(node_str, node->label) == NULL)
+  {
+    int i = 0;
+    while (node_str[i] != 0)
+      i++;
+    node_str[i] = node->label;
+
+    printf("NODE %c -->", node->label);
+
+    l = node->children;
+    while (l != NULL)
+    {
+      printf(" %c", l->gnode->label);
+      l = l->next;
+    }
+    printf("\n");
+  }
 
   l = node->children;
   while (l != NULL)
   {
-    printf(" %c", l->gnode->label);
+    impl_gnode_print(l->gnode, node_str);
     l = l->next;
   }
-  printf("\n");
+}
 
-  l = node->children;
-  while (l != NULL)
-  {
-    gnode_print(l->gnode);
-    l = l->next;
-  }
+void gnode_print(gnode_t *node)
+{
+  char *node_str = malloc(sizeof(char) * (gnode_count + 1));
+  if (node_str == NULL)
+    exit(EXIT_FAILURE);
+  for (int i = 0; i <= gnode_count; i++)
+    node_str[i] = 0;
+  impl_gnode_print(node, node_str);
+  free(node_str);
 }
 
 int main(void)
