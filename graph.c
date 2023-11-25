@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <threads.h>
+#include <time.h>
 #include <unistd.h>
 
 /* SECTION - Prototypes */
@@ -51,7 +52,7 @@ typedef struct gnode gnode_t;
  *
  *****************************************************************************/
 
-/*ANCHOR - MCalloc */
+/*ANCHOR - mcalloc */
 void *mcalloc(size_t size)
 {
   void *addr = calloc(1, size);
@@ -63,7 +64,17 @@ void *mcalloc(size_t size)
   return addr;
 }
 
-/*ANCHOR - Lock mutex */
+/*ANCHOR - mutex: init */
+void mutex_init(mtx_t *mutex)
+{
+  if (mtx_init(mutex, mtx_plain) != thrd_success)
+  {
+    fprintf(stderr, "Error in mtx_init\n");
+    exit(EXIT_FAILURE);
+  }
+}
+
+/*ANCHOR - mutex: lock */
 void lock(mtx_t *mutex)
 {
   int result = mtx_lock(mutex);
@@ -74,7 +85,7 @@ void lock(mtx_t *mutex)
   }
 }
 
-/*ANCHOR - Unlock mutex */
+/*ANCHOR - mutex: unlock */
 void unlock(mtx_t *mutex)
 {
   int result = mtx_unlock(mutex);
@@ -85,7 +96,17 @@ void unlock(mtx_t *mutex)
   }
 }
 
-/*ANCHOR - Cond var wait */
+/*ANCHOR - cvar: init*/
+void cvar_init(cnd_t *cvar)
+{
+  if (cnd_init(cvar) != thrd_success)
+  {
+    fprintf(stderr, "Error in cnd_init\n");
+    exit(EXIT_FAILURE);
+  }
+}
+
+/*ANCHOR - cvar: wait */
 void wait(cnd_t *cvar, mtx_t *mutex)
 {
   if (cnd_wait(cvar, mutex) != thrd_success)
@@ -95,7 +116,7 @@ void wait(cnd_t *cvar, mtx_t *mutex)
   }
 }
 
-/*ANCHOR - Cond var broadcast */
+/*ANCHOR - cvar: broadcast */
 void broadcast(cnd_t *var)
 {
   if (cnd_broadcast(var) != thrd_success)
@@ -194,15 +215,22 @@ struct gnode
 
 /* SECTION - Variables */
 
-/*ANCHOR - gnode: counter */
-int gnode_count = 0;
-
 /*ANCHOR - graph: global var */
-/* All tasks operate on the global graph */
+/* All tasks operate on the global graph. This variable hold a pointer to the
+gnode labeled 'A'. */
 gnode_t *graph;
 
+/*ANCHOR - graph: size */
+/* Total number of gnodes */
+int graph_size = 0;
+
 /*ANCHOR - graph: loops */
+/* Total number of loops to run */
 int graph_loops;
+
+/*ANCHOR - graph: loop */
+/* Current loop number */
+int graph_loop;
 
 /*!SECTION - Variables */
 
@@ -213,16 +241,14 @@ gnode_t *gnode_new(char label, task_t task)
 {
   gnode_t *gnode = (gnode_t *)mcalloc(sizeof(gnode_t));
 
-  gnode_count++;
+  graph_size++;
   gnode->label = label;
   gnode->deps.required = 0;
   gnode->deps.satisfied = 0;
   gnode->task = task;
   gnode->children = NULL;
   gnode->parents = NULL;
-
-  if (mtx_init(&gnode->mutex, mtx_plain) != thrd_success)
-    exit(EXIT_FAILURE);
+  mutex_init(&gnode->mutex);
 
   return gnode;
 }
@@ -317,7 +343,7 @@ void impl_gnode_print(gnode_t *gnode, char *gnode_labels)
 /*ANCHOR - gnode: print graph */
 void gnode_print(gnode_t *gnode)
 {
-  char *gnode_labels = mcalloc(sizeof(char) * (gnode_count + 1));
+  char *gnode_labels = mcalloc(sizeof(char) * (graph_size + 1));
 
   impl_gnode_print(gnode, gnode_labels);
   free(gnode_labels);
@@ -356,12 +382,8 @@ cnd_t tasks_queue_cvar;
 void tasks_queue_init()
 {
   tasks_queue_length = 0;
-
-  if (mtx_init(&tasks_queue_mtx, mtx_plain) != thrd_success)
-    exit(EXIT_FAILURE);
-
-  if (cnd_init(&tasks_queue_cvar) != thrd_success)
-    exit(EXIT_FAILURE);
+  mutex_init(&tasks_queue_mtx);
+  cvar_init(&tasks_queue_cvar);
 }
 
 /*ANCHOR - tasks queue: pop front */
@@ -397,6 +419,81 @@ void task_queue_push_back(gnode_t *gnode)
 /*!SECTION - Queue os tasks */
 #pragma endregion
 
+/* SECTION - Execution time & trace */
+#pragma region
+/*****************************************************************************
+ *
+ *                        EXECUTION TIME AND TRACE
+ *
+ *****************************************************************************/
+
+/* SECTION - Types */
+
+/*ANCHOR - exec time: type */
+/* The result of 'end - start' is the duration time of a graph loop */
+typedef struct
+{
+  clock_t start;
+  clock_t end;
+} exec_time_t;
+
+/*ANCHOR - exec time: samples */
+/* Used to compute the duration time of each graph loop  */
+exec_time_t *exec_time_samples;
+
+/*!SECTION - Types */
+
+/* SECTION - Variables */
+
+/*ANCHOR - exec trace: global var */
+/* An execution trace is a sequence of characters (node labels) indicating the
+start and end of a graph node. It is used to check the validity of a graph
+loop, in which no child starts before all parents have finished. For example,
+if 'A --> a', then a valid trace cannot contain '..A..a..A..'; the trace must
+be like '..A..A..a..'. There is a trace per graph loop.
+*/
+char *exec_trace;
+
+/*ANCHOR - exec trace: mutex */
+mtx_t exec_trace_mtx;
+
+/*!SECTION - Variables */
+
+/* SECTION - Functions */
+
+/*ANCHOR - exec trace: init */
+/* Depends on the graph_size: must be called after the graph has been created.
+ */
+void exec_trace_init()
+{
+  exec_trace = mcalloc(sizeof(char) * (2 * graph_size + 1));
+  mutex_init(&exec_trace_mtx);
+}
+
+void exec_trace_reset()
+{
+  exec_trace[0] = 0;
+}
+
+/*ANCHOR - exec trace: append */
+void exec_trace_append(char label)
+{
+  int i = 0;
+  lock(&exec_trace_mtx);
+  {
+    while (exec_trace[i] != 0)
+      i++;
+    exec_trace[i] = label;
+    exec_trace[i + 1] = 0;
+  }
+  unlock(&exec_trace_mtx);
+}
+
+/*!SECTION - Functions */
+
+/*!SECTION - Execution time & trace */
+#pragma endregion
+
 /* SECTION - Pool of runners */
 #pragma region
 /*****************************************************************************
@@ -426,7 +523,14 @@ atomic_int runners_count;
 
 /* SECTION - Functions */
 
-/*ANCHOR - runners: implementation */
+/*ANCHOR - runner: prototypes */
+/* Check finalization conditions*/
+void runner_check_loops();
+
+/* Enqueue ready-to-run child nodes */
+void runner_process_children(gnode_t *gnode);
+
+/*ANCHOR - runner: implementation */
 int runner(void *arg)
 {
   int *id = (int *)arg;
@@ -454,28 +558,59 @@ int runner(void *arg)
 
     /* execute task */
     printf("runner %d task %c\n", *id, gnode->label);
+    exec_trace_append(gnode->label);
     (gnode->task)();
+    exec_trace_append(gnode->label);
 
-    /* reset satisfied dependencies for next cycle */
+    /* reset satisfied dependencies for next loop */
     gnode->deps.satisfied = 0;
 
-    /* update children dependencies; if met, append child to task queue */
-    lnode_t *child = gnode->children;
-    while (child != NULL)
-    {
-      lock(&child->gnode->mutex);
-      {
-        if (child->gnode->deps.required == ++child->gnode->deps.satisfied)
-          task_queue_push_back(child->gnode);
-      }
-      unlock(&child->gnode->mutex);
-      child = child->next;
-    }
+    if (gnode->label == 'Z')
+      runner_check_loops();
+    else
+      runner_process_children(gnode);
   }
 
 exit:
   printf("runner %d exit\n", *id);
   return 0;
+}
+
+/*ANCHOR - runner: check loops */
+void runner_check_loops()
+{
+  printf("   exec trace: %s\n", exec_trace);
+  if (graph_loop == graph_loops)
+  {
+    /* stop graph execution */
+    printf("%d loops, stop runners\n", graph_loop);
+    runners_active = false;
+    tasks_queue_length = -1;
+    broadcast(&tasks_queue_cvar);
+  }
+  else
+  {
+    /* loop over the graph */
+    exec_trace_reset();
+    task_queue_push_back(graph);
+  }
+}
+
+/*ANCHOR - runner: process children */
+void runner_process_children(gnode_t *gnode)
+{
+  /* update children dependencies; if met, append child to task queue */
+  lnode_t *child = gnode->children;
+  while (child != NULL)
+  {
+    lock(&child->gnode->mutex);
+    {
+      if (child->gnode->deps.required == ++child->gnode->deps.satisfied)
+        task_queue_push_back(child->gnode);
+    }
+    unlock(&child->gnode->mutex);
+    child = child->next;
+  }
 }
 
 /*ANCHOR - runners: init pool */
@@ -530,25 +665,13 @@ void runners_join(void)
 void task_A(void)
 {
   printf("NEXT CYCLE\n");
+  graph_loop++;
 }
 
 /*ANCHOR - task: final (Z) */
 void task_Z(void)
 {
-  static int loops = 0;
-
-  printf("-- end of loop %d\n", ++loops);
-  if (loops == graph_loops)
-  {
-    /* stop graph execution */
-    printf("%d loops, stop runners\n", loops);
-    runners_active = false;
-    tasks_queue_length = -1;
-    broadcast(&tasks_queue_cvar);
-  }
-  else
-    /* loop over the graph */
-    task_queue_push_back(graph);
+  printf("-- end of loop %d\n", graph_loop);
 }
 
 /*ANCHOR - tasks: macro generator */
@@ -560,20 +683,27 @@ void task_Z(void)
   }
 
 /*ANCHOR - tasks: instantiation */
-GENERATE_TASK(a, 100);
-GENERATE_TASK(b, 1300);
-GENERATE_TASK(c, 1200);
-GENERATE_TASK(1, 1200);
+GENERATE_TASK(a, 200);
+GENERATE_TASK(b, 300);
+GENERATE_TASK(c, 100);
+GENERATE_TASK(1, 20);
 GENERATE_TASK(2, 100);
 GENERATE_TASK(3, 300);
 GENERATE_TASK(4, 200);
+GENERATE_TASK(i, 70);
+GENERATE_TASK(j, 80);
+GENERATE_TASK(k, 90);
 GENERATE_TASK(x, 50);
+GENERATE_TASK(y, 50);
+
 /*!SECTION - Tasks implementation */
 #pragma endregion
 
 /*SECTION - Main function */
 int main(void)
 {
+  int loops = 10;
+  int runners = 8;
   gnode_t *gnode, *end;
 
   /*ANCHOR - Graph creation */
@@ -595,26 +725,47 @@ int main(void)
   gnode = gnode_get(graph, 'b');
   gnode_child(gnode, gnode_get(graph, '2'));
 
-  /* c -> { 2, 3, 4 } */
+  /* c -> { 3, 4 } */
   gnode = gnode_get(graph, 'c');
-  gnode_child(gnode, gnode_get(graph, '2'));
   gnode_child_new(gnode, '3', task_3);
   gnode_child_new(gnode, '4', task_4);
 
-  /* 1 --> { Z } */
-  gnode_child(gnode_get(graph, '1'), end);
+  /* 1 --> { i, j } */
+  gnode = gnode_get(graph, '1');
+  gnode_child_new(gnode, 'i', task_i);
+  gnode_child_new(gnode, 'j', task_j);
 
-  /* 2 --> { x, Z } */
+  /* 2 --> { k } */
   gnode = gnode_get(graph, '2');
-  gnode_child_new(gnode, 'x', task_x);
+  gnode_child_new(gnode, 'k', task_k);
+
+  /* 3 --> { k } */
+  gnode = gnode_get(graph, '3');
+  gnode_child(gnode, gnode_get(graph, 'k'));
+
+  /* 4 --> { Z } */
+  gnode = gnode_get(graph, '4');
   gnode_child(gnode, end);
 
-  /* { 3, 4 } --> x */
-  gnode = gnode_get(graph, 'x');
-  gnode_child(gnode_get(graph, '3'), gnode);
-  gnode_child(gnode_get(graph, '4'), gnode);
+  /* i --> { x } */
+  gnode = gnode_get(graph, 'i');
+  gnode_child_new(gnode, 'x', task_x);
+
+  /* j --> { x, y } */
+  gnode = gnode_get(graph, 'j');
+  gnode_child(gnode, gnode_get(graph, 'x'));
+  gnode_child_new(gnode, 'y', task_y);
+
+  /* k --> { y } */
+  gnode = gnode_get(graph, 'k');
+  gnode_child(gnode, gnode_get(graph, 'y'));
 
   /* x --> { Z } */
+  gnode = gnode_get(graph, 'x');
+  gnode_child(gnode, end);
+
+  /* y --> { Z } */
+  gnode = gnode_get(graph, 'y');
   gnode_child(gnode, end);
 
   /* Print graph */
@@ -624,13 +775,18 @@ int main(void)
   tasks_queue_init();
 
   /*ANCHOR - Runners init */
-  runners_init_pool(3);
+  runners_init_pool(runners);
+
+  /*ANCHOR - Execution trace init */
+  exec_trace_init();
 
   /*ANCHOR - Runners start */
   runners_loop(20);
 
   /*ANCHOR - Runners join */
   runners_join();
+
+  /*TODO - Destroy all allocated resources */
 
   printf("exit %d\n", EXIT_SUCCESS);
   exit(EXIT_SUCCESS);
