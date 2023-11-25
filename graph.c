@@ -194,12 +194,15 @@ struct gnode
 
 /* SECTION - Variables */
 
-/*ANCHOR - gnode: global graph */
+/*ANCHOR - gnode: counter */
+int gnode_count = 0;
+
+/*ANCHOR - graph: global var */
 /* All tasks operate on the global graph */
 gnode_t *graph;
 
-/*ANCHOR - gnode: counter */
-int gnode_count = 0;
+/*ANCHOR - graph: loops */
+int graph_loops;
 
 /*!SECTION - Variables */
 
@@ -496,9 +499,11 @@ void runners_init_pool(int size)
     ;
 }
 
-/*ANCHOR - runners: start */
-void runners_start(void)
+/*ANCHOR - runners: loop */
+/* Run the task graph the specified number of loops */
+void runners_loop(int loops)
 {
+  graph_loops = loops;
   task_queue_push_back(graph);
 }
 
@@ -533,10 +538,10 @@ void task_Z(void)
   static int loops = 0;
 
   printf("-- end of loop %d\n", ++loops);
-  if (loops == 20)
+  if (loops == graph_loops)
   {
     /* stop graph execution */
-    printf("%d loops, setting runners_active to false\n", loops);
+    printf("%d loops, stop runners\n", loops);
     runners_active = false;
     tasks_queue_length = -1;
     broadcast(&tasks_queue_cvar);
@@ -612,19 +617,22 @@ int main(void)
   /* x --> { Z } */
   gnode_child(gnode, end);
 
+  /* Print graph */
   gnode_print(graph);
 
   /*ANCHOR - Tasks queue init */
+  tasks_queue_init();
 
   /*ANCHOR - Runners init */
   runners_init_pool(3);
 
   /*ANCHOR - Runners start */
-  runners_start();
+  runners_loop(20);
 
   /*ANCHOR - Runners join */
   runners_join();
 
+  printf("exit %d\n", EXIT_SUCCESS);
   exit(EXIT_SUCCESS);
 }
 /*!SECTION - Main function */
