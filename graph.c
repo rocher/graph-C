@@ -349,6 +349,18 @@ cnd_t tasks_queue_cvar;
 
 /* SECTION - Functions */
 
+/*ANCHOR - tasks queue: init */
+void tasks_queue_init()
+{
+  tasks_queue_length = 0;
+
+  if (mtx_init(&tasks_queue_mtx, mtx_plain) != thrd_success)
+    exit(EXIT_FAILURE);
+
+  if (cnd_init(&tasks_queue_cvar) != thrd_success)
+    exit(EXIT_FAILURE);
+}
+
 /*ANCHOR - tasks queue: pop front */
 gnode_t *task_queue_pop_front()
 {
@@ -401,6 +413,12 @@ int **runners_id;
 /*ANCHOR - runners: pool */
 thrd_t *runners_pool;
 
+/*ANCHOR - runners: pool_size */
+int runners_pool_size;
+
+/*ANCHOR - runners: count */
+atomic_int runners_count;
+
 /*!SECTION - Variables */
 
 /* SECTION - Functions */
@@ -411,19 +429,28 @@ int runner(void *arg)
   int *id = (int *)arg;
   gnode_t *gnode;
 
-  printf("runner %d started\n", *id);
+  printf("runner %d start\n", *id);
+  atomic_fetch_add(&runners_count, 1);
 
   while (runners_active)
   {
     /* wait for new pending tasks */
+    lock(&tasks_queue_mtx);
     while (tasks_queue_length == 0)
       wait(&tasks_queue_cvar, &tasks_queue_mtx);
+
+    if (!runners_active)
+    {
+      unlock(&tasks_queue_mtx);
+      goto exit;
+    }
 
     /* get first pending task */
     gnode = task_queue_pop_front();
     unlock(&tasks_queue_mtx);
 
     /* execute task */
+    printf("runner %d task %c\n", *id, gnode->label);
     (gnode->task)();
 
     /* reset satisfied dependencies for next cycle */
@@ -442,32 +469,31 @@ int runner(void *arg)
       child = child->next;
     }
   }
+
+exit:
+  printf("runner %d exit\n", *id);
   return 0;
 }
 
 /*ANCHOR - runners: init pool */
-void runners_init_pool(int runners_count)
+void runners_init_pool(int size)
 {
-  if (mtx_init(&tasks_queue_mtx, mtx_plain) != thrd_success)
-    exit(EXIT_FAILURE);
+  runners_pool_size = size;
+  runners_pool = mcalloc(sizeof(thrd_t) * runners_pool_size);
+  runners_id = (int **)mcalloc(sizeof(int *) * runners_pool_size);
+  atomic_init(&runners_count, 0);
 
-  if (cnd_init(&tasks_queue_cvar) != thrd_success)
-    exit(EXIT_FAILURE);
-
-  lock(&tasks_queue_mtx);
-  tasks_queue_length = 0;
-
-  runners_pool = mcalloc(sizeof(thrd_t) * runners_count);
-  runners_id = (int **)mcalloc(sizeof(int *) * runners_count);
-
-  for (int i = 0; i < runners_count; i++)
+  for (int i = 0; i < runners_pool_size; i++)
   {
     runners_id[i] = (int *)mcalloc(sizeof(int));
     *runners_id[i] = i;
+    printf("runner %d create\n", i);
     if (thrd_create(&runners_pool[i], &runner, (void *)runners_id[i]) != thrd_success)
       exit(EXIT_FAILURE);
-    printf("runner %d created\n", i);
   }
+
+  while (atomic_load(&runners_count) != runners_pool_size)
+    ;
 }
 
 /*ANCHOR - runners: start */
@@ -475,6 +501,14 @@ void runners_start(void)
 {
   task_queue_push_back(graph);
 }
+
+/*ANCHOR - runners: join */
+void runners_join(void)
+{
+  for (int i = 0; i < runners_pool_size; i++)
+    thrd_join(runners_pool[i], NULL);
+}
+
 /*!SECTION - Functions */
 /*!SECTION - Pool of runners */
 #pragma endregion
@@ -496,8 +530,20 @@ void task_A(void)
 /*ANCHOR - task: final (Z) */
 void task_Z(void)
 {
-  /* loop over the graph */
-  task_queue_push_back(graph);
+  static int loops = 0;
+
+  printf("-- end of loop %d\n", ++loops);
+  if (loops == 20)
+  {
+    /* stop graph execution */
+    printf("%d loops, setting runners_active to false\n", loops);
+    runners_active = false;
+    tasks_queue_length = -1;
+    broadcast(&tasks_queue_cvar);
+  }
+  else
+    /* loop over the graph */
+    task_queue_push_back(graph);
 }
 
 /*ANCHOR - tasks: macro generator */
@@ -510,9 +556,9 @@ void task_Z(void)
 
 /*ANCHOR - tasks: instantiation */
 GENERATE_TASK(a, 100);
-GENERATE_TASK(b, 300);
-GENERATE_TASK(c, 200);
-GENERATE_TASK(1, 200);
+GENERATE_TASK(b, 1300);
+GENERATE_TASK(c, 1200);
+GENERATE_TASK(1, 1200);
 GENERATE_TASK(2, 100);
 GENERATE_TASK(3, 300);
 GENERATE_TASK(4, 200);
@@ -568,13 +614,17 @@ int main(void)
 
   gnode_print(graph);
 
-  /*ANCHOR - Runners initialization */
-  runners_init_pool(6);
+  /*ANCHOR - Tasks queue init */
+
+  /*ANCHOR - Runners init */
+  runners_init_pool(3);
 
   /*ANCHOR - Runners start */
   runners_start();
 
-  sleep(1);
+  /*ANCHOR - Runners join */
+  runners_join();
+
   exit(EXIT_SUCCESS);
 }
 /*!SECTION - Main function */
