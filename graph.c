@@ -745,8 +745,9 @@ GENERATE_TASK(y, 100);
 /*SECTION - Main function */
 int main(void)
 {
+  /*ANCHOR - Loops and Runners */
   int loops = 10;
-  int runners = 8;
+  int runners = 5;
   gnode_t *gnode, *end;
 
   /*ANCHOR - Graph creation */
