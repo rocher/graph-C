@@ -138,10 +138,27 @@ gives similar results:
 > Note: Just to give you a comparative idea of both CPUs, compilation time of
 > the file `graph.c` is 50 times faster in the powerful one.
 
-Results obtained show that the
+Results obtained intuitively show that the overhead introduced by proactive
+runners is not so big. The case of the riscv-64 CPU is different because the
+single CPU has to simulate all threads. With only one runner, a 4% of
+additional time is added, but this includes the DAG creation and
+initialization. Better time measurements must be implemented to have accurate
+results (TODO).
 
 
-## Code organization
+## Conclusion
+
+This simulation method can be used to evaluate the *parallelization degree* of
+a DAG and assign the optimal number of runners. Also, a refined implementation
+that keeps time measures in the DAG nodes can be used to find the critical
+path, traversing the DAG in reverse looking for the most time consuming nodes.
+
+
+---
+
+## Practical Notes
+
+### Code organization
 
 This implementation has been put in a single file intentionally. Otherwise, a
 set of modules in a separate files would be a much a more convenient
@@ -156,12 +173,12 @@ then you will have an easy way to navigate and understand code:
 </p>
 
 
-## Build instructions
+### Build instructions
 
 There is no included build script, simply `gcc graph.c -O3 -o graph` and run it.
 
 
-## Pending
+### Pending
 
 Not yet implemented:
 
