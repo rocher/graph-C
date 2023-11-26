@@ -40,7 +40,7 @@ This implementation represents a DAG as C structure with the required fields,
 like:
 
   * node label: $A$, $1$, $x$, etc
-  * list of connected nodes: the *children*, e.g. $A\rightarrow { a, b, c }$
+  * list of connected nodes: the *children*, e.g. $A\rightarrow \{ a, b, c \}$
   * list of connecting nodes: the *parents*, e.g. $y\rightarrow\{ j, k \}$
   * pinter to a function: the *task* that the node represents
   * number of required dependencies: number of parents connecting the node
@@ -108,6 +108,21 @@ then you will have an easy way to navigate and understand code:
 <p align="center">
     <img src="code-organization.png" width="250px" />
 </p>
+
+
+## Build instructions
+
+There is no included build script, simply `gcc graph.c -O3 -o graph` and run it.
+
+
+## Pending
+
+Not yet implemented:
+
+  * Add command line arguments to select the number of loops and runners.
+  * Find the critical path: traverse the DAG in reverse, from $Z$ to $A$ and,
+    according to the ending time of each task, select the path with higher
+    duration.
 
 ---
 ## License
