@@ -1,4 +1,4 @@
-[![License](https://img.shields.io/github/license/rocher/graph-C.svg?color=blue)](https://github.com/rocher/graph-C/blob/master/LICENSE)
+[![License](https://img.shields.io/github/license/rocher/graph-c.svg?color=blue)](https://github.com/rocher/graph-c/blob/master/LICENSE)
 
 # Scheduling a Directed Acyclic Graph of Tasks
 
@@ -39,8 +39,8 @@ DAG of the figure with a pool of *proactive runners* working in parallel.
 This implementation represents a DAG as C structure with the required fields,
 like:
 
-  * node label: `A`, `1`, `x`, etc
-  * list of connected nodes: the *children*, e.g. $A\rightarrow\{ a, b, c \}$
+  * node label: $A$, $1$, $x$, etc
+  * list of connected nodes: the *children*, e.g. $A\rightarrow\left{ a, b, c \right}$
   * list of connecting nodes: the *parents*, e.g. $y\rightarrow\{ j, k \}$
   * pinter to a function: the *task* that the node represents
   * number of required dependencies: number of parents connecting the node
@@ -48,8 +48,8 @@ like:
   * number of satisfied dependencies: number of parents that have finished
     their execution (at run time)
 
-Nodes `A` and `Z` have been added to control the staring and end of
-the process.
+Nodes $A$ and $Z$ have been added to control the staring and end of the
+process.
 
 The simulation environment allows you to specify the amount of time required
 by each task (in ms). A task simply waits for the specified amount of time.
@@ -108,3 +108,7 @@ then you will have an easy way to navigate and understand code:
 <p align="center">
     <img src="code-organization.png" width="250px" />
 </p>
+
+---
+## License
+MIT (c) 2023 Francesc Rocher
