@@ -20,9 +20,9 @@ taken.
 This is an example of a DAG with a number of tasks organized in four stages
 (colors):
 
-<br>
-<img src="graph.excalidraw.png" width="85%" align="center"/>
-<br>
+<p align="center">
+    <img src="graph.excalidraw.png" width="85%" />
+</p>
 
 In a DAG, no task can start if the parents have not been finished. In the
 example, task `2` cannot start if tasks `a` and `b` haven't finished. This is
@@ -105,6 +105,6 @@ But, if you use `vscode` and the extension [Comment
 Anchors](https://marketplace.visualstudio.com/items?itemName=ExodiusStudios.comment-anchors),
 then you will have an easy way to navigate and understand code:
 
-<br>
-<center><img src="code-organization.png" width="250px"/></center>
-<br>
+<p align="center">
+    <img src="code-organization.png" width="250px" />
+</p>
