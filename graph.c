@@ -359,7 +359,7 @@ void impl_gnode_print(gnode_t *gnode, char *gnode_labels)
       i++;
     gnode_labels[i] = gnode->label;
 
-    printf("NODE %c -->", gnode->label);
+    printf("  node %c -->", gnode->label);
     child = gnode->children;
     while (child != NULL)
     {
@@ -385,6 +385,7 @@ void gnode_print(gnode_t *gnode)
 
   char *gnode_labels = mcalloc(sizeof(char) * (graph_size + 1));
 
+  printf("graph:\n");
   impl_gnode_print(gnode, gnode_labels);
   free(gnode_labels);
 }
