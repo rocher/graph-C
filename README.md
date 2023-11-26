@@ -40,8 +40,8 @@ This implementation represents a DAG as C structure with the required fields,
 like:
 
   * node label: $A$, $1$, $x$, etc
-  * list of connected nodes: the *children*, e.g. $A\rightarrow \{ a, b, c \}$
-  * list of connecting nodes: the *parents*, e.g. $y\rightarrow\{ j, k \}$
+  * list of connected nodes: the *children*, e.g. $A\rightarrow \\{ a, b, c \\}$
+  * list of connecting nodes: the *parents*, e.g. $y\rightarrow \\{ j, k \\}$
   * pinter to a function: the *task* that the node represents
   * number of required dependencies: number of parents connecting the node
     (topologically)
