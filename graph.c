@@ -17,6 +17,41 @@
 #include <time.h>
 #include <unistd.h>
 
+/* SECTION - Overall settings */
+#pragma region
+/*****************************************************************************
+ *
+ *                             OVERALL SETTINGS
+ *
+ *****************************************************************************/
+
+/*ANCHOR - graph: print */
+/* Check the validity of the constructed graph */
+#define PRINT_GRAPH false
+
+/*ANCHOR - log: loops */
+/* Mark the start and end of a loop */
+#define LOG_LOOPS false
+
+/*ANCHOR - log: runner lifecycle */
+/* Show creation, activation an deactivation of runners */
+#define LOG_RUNNER_LIFECYCLE false
+
+/*ANCHOR - log: runner/task */
+/* Show who's running which task */
+#define LOG_RUNNER_TASK false
+
+/*ANCHOR - log: exec trace */
+/* Show the execution trace at the end of a loop */
+#define LOG_EXEC_TRACE false
+
+/*ANCHOR - tasks: jitter */
+/* Add some jitter to the task duration (+/- random 10% of the duration) */
+#define TASK_JITTER false
+
+/*!SECTION - Overall settings */
+#pragma endregion
+
 /* SECTION - Prototypes */
 #pragma region
 /*****************************************************************************
@@ -345,6 +380,9 @@ void impl_gnode_print(gnode_t *gnode, char *gnode_labels)
 /*ANCHOR - gnode: print graph */
 void gnode_print(gnode_t *gnode)
 {
+  if (!PRINT_GRAPH)
+    return;
+
   char *gnode_labels = mcalloc(sizeof(char) * (graph_size + 1));
 
   impl_gnode_print(gnode, gnode_labels);
@@ -538,7 +576,7 @@ int runner(void *arg)
   int *id = (int *)arg;
   gnode_t *gnode;
 
-  printf("runner %d start\n", *id);
+  LOG_RUNNER_LIFECYCLE ? printf("runner %d start\n", *id) : 0;
   atomic_fetch_add(&runners_count, 1);
 
   while (runners_active)
@@ -559,7 +597,7 @@ int runner(void *arg)
     unlock(&tasks_queue_mtx);
 
     /* execute task */
-    printf("runner %d task %c\n", *id, gnode->label);
+    LOG_RUNNER_TASK ? printf("runner %d task %c\n", *id, gnode->label) : 0;
     exec_trace_append(gnode->label);
     (gnode->task)();
     exec_trace_append(gnode->label);
@@ -574,14 +612,14 @@ int runner(void *arg)
   }
 
 exit:
-  printf("runner %d exit\n", *id);
+  LOG_RUNNER_LIFECYCLE ? printf("runner %d exit\n", *id) : 0;
   return 0;
 }
 
 /*ANCHOR - runner: check loops */
 void runner_check_loops()
 {
-  printf("   exec trace: %s\n", exec_trace);
+  LOG_EXEC_TRACE ? printf("exec trace: %s\n", exec_trace) : 0;
   if (graph_loop == graph_loops)
   {
     /* stop graph execution */
@@ -627,7 +665,7 @@ void runners_init_pool(int size)
   {
     runners_id[i] = (int *)mcalloc(sizeof(int));
     *runners_id[i] = i;
-    printf("runner %d create\n", i);
+    LOG_RUNNER_LIFECYCLE ? printf("runner %d create\n", i) : 0;
     if (thrd_create(&runners_pool[i], &runner, (void *)runners_id[i]) != thrd_success)
       exit(EXIT_FAILURE);
   }
@@ -666,22 +704,25 @@ void runners_join(void)
 /*ANCHOR - task: initial (A) */
 void task_A(void)
 {
-  printf("NEXT CYCLE\n");
+  LOG_LOOPS ? printf("-- start of loop\n") : 0;
   graph_loop++;
 }
 
 /*ANCHOR - task: final (Z) */
 void task_Z(void)
 {
-  printf("-- end of loop %d\n", graph_loop);
+  LOG_LOOPS ? printf("-- end of loop %d\n", graph_loop) : 0;
 }
 
 /*ANCHOR - tasks: macro generator */
-#define GENERATE_TASK(NAME, MS)                                    \
-  void task_##NAME(void)                                           \
-  {                                                                \
-    struct timespec time = {.tv_sec = 0, .tv_nsec = MS * 1000000}; \
-    thrd_sleep(&time, NULL);                                       \
+#define GENERATE_TASK(NAME, MS)                            \
+  void task_##NAME(void)                                   \
+  {                                                        \
+    int nsec = MS * 1000000;                               \
+    if (TASK_JITTER)                                       \
+      nsec += (1 - rand() % 3) * (rand() % (nsec / 10));   \
+    struct timespec time = {.tv_sec = 0, .tv_nsec = nsec}; \
+    thrd_sleep(&time, NULL);                               \
   }
 
 /*ANCHOR - tasks: instantiation */
