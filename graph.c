@@ -750,6 +750,8 @@ int main(void)
   int runners = 5;
   gnode_t *gnode, *end;
 
+  srand(time(NULL));
+
   /*ANCHOR - Graph creation */
   /* Initial and final nodes */
   graph = gnode_new('A', task_A);
