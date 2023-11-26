@@ -1,6 +1,8 @@
 /******************************************************************************
  *
- *  Parallel Task Runner for Directed Acyclic Graphs
+ *  Scheduling a Directed Acyclic Graph of Tasks
+ *  https://github.com/rocher/graph-C
+ *
  *  Copyright (c) 2023 Francesc Rocher <francesc.rocher@gmail.com>
  *  SPDX-License-Identifier: MIT
  *
