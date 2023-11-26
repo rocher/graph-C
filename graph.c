@@ -824,7 +824,7 @@ int main(void)
   exec_trace_init();
 
   /*ANCHOR - Runners start */
-  runners_loop(20);
+  runners_loop(loops);
 
   /*ANCHOR - Runners join */
   runners_join();
