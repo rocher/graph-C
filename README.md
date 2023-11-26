@@ -21,7 +21,7 @@ This is an example of a DAG with a number of tasks organized in four stages
 (colors):
 
 <br>
-<center><img src="graph.excalidraw.png" width="90%"/></center>
+<img src="graph.excalidraw.png" width="85%" align="center"/>
 <br>
 
 In a DAG, no task can start if the parents have not been finished. In the
