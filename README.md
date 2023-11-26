@@ -25,19 +25,19 @@ This is an example of a DAG with a number of tasks organized in four stages
 </p>
 
 In a DAG, no task can start if the parents have not been finished. In the
-example, task `2` cannot start if tasks `a` and `b` haven't finished. This is
-obvious because inputs of task `2` are outputs of tasks `a` and `b`.
+example, task $2$ cannot start if tasks $a$ and $b$ haven't finished. This is
+obvious because inputs of task $2$ are outputs of tasks $a$ and $b$.
 
 Given a DAG and a number of CPU threads, finding the best scheduling
-assignment of a DAG into CPU threads is an problem. This repository
-implements a different approach, consisting in simulation environment for the
-DAG of the figure with a pool of *proactive runners* working in parallel.
+assignment of a DAG into CPU threads is an $NP$ problem. This repository
+implements a different approach, consisting in a simulation environment for
+the DAG of the figure with a pool of *proactive runners* working in parallel.
 
 
 ## DAG representation
 
-This implementation represents a DAG as C structure with the required fields,
-like:
+This implementation represents a DAG as a $C$ structure with the required
+fields, like:
 
   * node label: $A$, $1$, $x$, etc
   * list of connected nodes: the *children*, e.g. $A\rightarrow \\{ a, b, c \\}$
@@ -52,26 +52,25 @@ Nodes $A$ and $Z$ have been added to control the staring and end of the
 process.
 
 The simulation environment allows you to specify the amount of time required
-by each task (in ms). A task simply waits for the specified amount of time.
-This means that tasks are not consuming CPU time, which is important when
-simulations are performed ina single CPU core. It is possible to have a
-multiple thread application *really* running in parallel in a single CPU core
-if threads are simply sleeping.
+by each task (in ms). All simulated tasks simply wait for the specified amount
+of time. This means that tasks are not consuming CPU time, which is important
+when simulations are performed in a single CPU core. In other words, it is
+possible to have a multiple-threaded application *really* running in parallel
+in a single CPU core if threads are simply sleeping.
 
 
 ## Queue of tasks
 
-The DAG nodes that can be run are put in a queue of tasks. Only those tasks
-whose parent haven finished their execution can enter this queue. In other
-words, a node task can be triggered if and only if the number of satisfied
-dependencies is equal to the number of required dependencies.  This guarantees
-the task precedence defined by the DAG.
+DAG nodes that can be triggered are put in a queue of tasks. In other words, a
+task can be triggered if the number of satisfied dependencies is equal to the
+number of required dependencies. This guarantees the task precedence defined
+by the DAG.
 
 
 ## Proactive runners
 
-In this implementation, a *proactive runner* is a C thread implemented in the
-following way:
+In this implementation, a *proactive runner* is a $C$ thread implemented in
+the following way:
 
   * wait for a task (DAG node) to be appended in the queue of tasks
   * get the first task of the queue
@@ -88,11 +87,58 @@ following way:
 
 ## Scheduling DAG
 
-In the presented scenario there is no need to create a scheduling algorithm:
-put the task `A` in the queue of tasks and let the runners do their job.
+In the presented scenario there is no need to create a scheduling algorithm.
+Typically, this would require a list of task to be executed by each runner.
+Here, task $A$ is put in the  queue of tasks and let the runners do their job.
+
+To check that this works, an execution trace can be printed at the end of each
+DAG loop. The trace consist in a a sequence of node labels. Each node appends
+its label when it task starts, and again when the task finishes. Thus, it's
+easy to check the validity of a DAG loop by looking at the trace and making
+sure that no child is started before its parent(s). For example,
+`AAabca1c341ij3b2j4ix2kxkyyZZ` is a valid trace for that DAG of the figure.
 
 
 ## Simulation results
+
+To simplify things, the duration of all tasks when ran in sequence is 1
+second. Adjusting the parameters to 1 runner and 10 loops, the execution time
+of the program is slightly greater than 10s due to the small, almost
+negligible overhead of creating the DAG and the *proactivity* of the runners.
+
+Thess are the values obtained in a powerful 16-core x86_64 CPU:
+
+| Runnners| Avg. Time  |
+|--------:|-----------:|
+|      1  |     10.02  |
+|      2  |      5.34  |
+|      3  |      4.20  |
+|      4  |      4.01  |
+|      5  |      4.01  |
+|      6  |      4.01  |
+
+It is important to note that DAGs have an *inherent parallelization degree*,
+meaning that there is a maximum number of nodes running in parallel. Adding
+more runners to the pool does not reduce the execution time of a DAG loop. In
+this case, it's easy to see that the optimal number of runners is 4.
+
+Because simulated tasks only wait for the specified number of ms and don't
+consume CPU, running the same simulation in a modest single-core riscv-64 CPU
+gives similar results:
+
+| Runnners| Avg. Time  |
+|--------:|-----------:|
+|      1  |     10.42  |
+|      2  |      5.36  |
+|      3  |      4.23  |
+|      4  |      4.04  |
+|      5  |      4.04  |
+|      6  |      4.04  |
+
+> Note: Just to give you a comparative idea of both CPUs, compilation time of
+> the file `graph.c` is 50 times faster in the powerful one.
+
+Results obtained show that the
 
 
 ## Code organization
@@ -120,6 +166,8 @@ There is no included build script, simply `gcc graph.c -O3 -o graph` and run it.
 Not yet implemented:
 
   * Add command line arguments to select the number of loops and runners.
+  * Measure overhead introduced by runners management in the DAG loop
+    execution.
   * Find the critical path: traverse the DAG in reverse, from $Z$ to $A$ and,
     according to the ending time of each task, select the path with higher
     duration.
